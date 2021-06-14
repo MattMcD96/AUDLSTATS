@@ -57,13 +57,35 @@ def makeMap(centarr, title,folder,type):
 
             H = math.ceil((xmax - xmin) * boost)  # height of heatmap
 
-            SCALE = 100  # increase scale to make heat map more blended
+            SCALE = 10  # increase scale to make heat map more blended
 
             img = points_to_gaussian_heatmap(centarrshift, H, W, SCALE)
             plt.imsave("tempheat.png", img)
             im1 = Image.open("tempheat.png")
             back_im = im1.copy()
             back_im.save(folder + '/' + title + '.png')
+
+        elif folder=="ALL":
+            W = math.ceil(120 * boost)  # width of heatmap
+
+            H = math.ceil(55 * boost)  # height of heatmap
+            scales=[10,25]
+            for SCALE in scales:
+                img = points_to_gaussian_heatmap(centarr, H, W, SCALE)
+
+                plt.imshow(img)
+                plt.show()
+                plt.imsave("tempheat.png", img)
+
+                im1 = Image.open("audl_field_of_play.png")
+                im2 = Image.open("tempheat.png")
+                back_im = im1.copy()
+                mask_im = Image.new("L", im2.size, 0)
+                draw = ImageDraw.Draw(mask_im)
+                shape = [(0, 0), (W, H)]
+                draw.rectangle(shape, fill=220)
+                back_im.paste(im2, (65, 78), mask_im)
+                back_im.save(folder+'/'+title + "at"+str(SCALE)+'.png')
 
         else:
             W = math.ceil(120 * boost)  # width of heatmap
@@ -88,8 +110,12 @@ def makeMap(centarr, title,folder,type):
             back_im.save(folder+'/'+title + '.png')
 
 
-teamKeyArr=["TB","ALL","ATL","AUS","BOS","CHI","DAL","DC","MAD","MIN","DET","IND","LA","NY","PHI","PIT","RAL","SD","SJ","SEA"]
-evCodeArr = [3,4,8,19,198,20,22]
+#teamKeyArr=["TB","ALL","ATL","AUS","BOS","CHI","DAL","DC","MAD","MIN","DET","IND","LA","NY","PHI","PIT","RAL","SD","SJ","SEA"]
+teamKeyArr=["ALL"]
+evCodeArr = [99]
+#evCodeArr = [3,8,19,198,20,22,99]
+codeDict={3:"Pull Landed",8:"Turnover Landed",19:"Drop",20:"Catch",22:"Goals",198:"ALL TO",99:"ThrowersView"}
+
 """
 3 Where pull landed
 4 ?? reverse brink mark
@@ -114,6 +140,7 @@ ID deep threats and players who dont go deep (resets/unders)
 """
 
 playerCode = 0
+eventcombine=np.array([])
 
 """
 9185 billy
@@ -131,9 +158,9 @@ playerCode = 0
 
 
 
-status=0
+status=1
 for teamKey in teamKeyArr:
-    print(str(status) +" of " + str(len(teamKeyArr)))
+    print(str(teamKeyArr[(status-1)])+" "+str(status) +" of " + str(len(teamKeyArr)))
     status+=1
     for evCode in evCodeArr:
         centerArrIndi = []
@@ -146,8 +173,9 @@ for teamKey in teamKeyArr:
         throwDictCF = {}
         receiverDict = {}
         receiverDictDF = {}
+        receiverDictCF = {}
         playerDict = {}
-        print(evCode)
+        print(codeDict[evCode])
         try:
             os.stat(teamKey)
         except:
@@ -159,6 +187,8 @@ for teamKey in teamKeyArr:
             # print result
             #print("Game info for game on {year}-{month}-{day} where {home} was home vs visiting {away}".format(year=gameinfo[0],month=gameinfo[1],day=gameinfo[2],away=gameinfo[3],home=gameinfo[4]))
 
+            month = gameinfo[1]
+            day = gameinfo[2]
 
             with open('GameSheets/' + filename) as f:
                 data = json.load(f)
@@ -178,10 +208,13 @@ for teamKey in teamKeyArr:
 
 
                 try:
-                    if teamKey == gameinfo[3] or teamKey == gameinfo[4] or teamKey == "ALL":
+                    print(evCode)
+                    if (teamKey == gameinfo[3] or teamKey == gameinfo[4] or teamKey == "ALL") and evCode==99:
                         eventArray = np.array(data["tsgAway"]["events"])
+
                         for line in eventArray:
                             event = line
+                            #eventcombine=np.append(eventcombine,event)
                             if (event['t'] == 20 or event['t'] == 8 or event['t'] == 22 or event['t'] == 19) and prevcode == 20:
                                 cent = ((event['x']-prevx) * boost, ((event['y']-prevy)) * boost )
                                 if teamKey == gameinfo[3] or teamKey == "ALL":
@@ -194,9 +227,13 @@ for teamKey in teamKeyArr:
                                 prevy = event['y']
                             prevcode = event['t']
 
+
                         eventArray = np.array(data["tsgHome"]["events"])
+
+                        prevcode=0
                         for line in eventArray:
                             event = line
+                            #eventcombine=np.append(eventcombine,event)
                             if (event['t'] == 20 or event['t'] == 8 or event['t'] == 22 or event['t'] == 19) and prevcode == 20:
                                 cent = ((event['x'] - prevx) * boost, (event['y'] - prevy) * boost)
                                 if teamKey == gameinfo[4] or teamKey == "ALL":
@@ -249,9 +286,11 @@ for teamKey in teamKeyArr:
                                 if prevcode == 20 and event['t'] == 20 and 'r' in event and event['r'] in receiverDict:
                                     receiverDict[event['r']].append((math.hypot(event['x'] - prevx, event['y'] - prevy),gameinfo[3],gameinfo[4]))
                                     receiverDictDF[event['r']].append((event['y'] - prevy,gameinfo[3],gameinfo[4]))
+                                    receiverDictCF[event['r']].append((event['x'] - prevx, gameinfo[3], gameinfo[4]))
                                 elif prevcode == 20 and event['t'] == 20 and 'r' in event:
                                     receiverDict[event['r']] = [(math.hypot(event['x'] - prevx, event['y'] - prevy),gameinfo[3],gameinfo[4])]
                                     receiverDictDF[event['r']] = [(event['y'] - prevy,gameinfo[3],gameinfo[4])]
+                                    receiverDictCF[event['r']] = [(event['x'] - prevx, gameinfo[3], gameinfo[4])]
 
                                 if event['t'] == 8 and prevcode == 20:
                                     if thrower in throwDict:
@@ -276,10 +315,14 @@ for teamKey in teamKeyArr:
                                     if 'r' in event and event['r'] in receiverDict:
                                         receiverDict[event['r']].append((math.hypot(event['x'] - prevx, event['y'] - prevy),gameinfo[3],gameinfo[4]))
                                         receiverDictDF[event['r']].append((event['y'] - prevy,gameinfo[3],gameinfo[4]))
+                                        receiverDictCF[event['r']].append(
+                                            (event['x'] - prevx, gameinfo[3], gameinfo[4]))
                                     else:
                                         if 'r' in event:
                                             receiverDict[event['r']] = [(math.hypot(event['x'] - prevx, event['y'] - prevy),gameinfo[3],gameinfo[4])]
                                             receiverDictDF[event['r']] = [(event['y'] - prevy,gameinfo[3],gameinfo[4])]
+                                            receiverDictCF[event['r']] = [
+                                                (event['x'] - prevx, gameinfo[3], gameinfo[4])]
 
                             if 'r' in event and  event['t'] == 20:
                                 thrower = event['r']
@@ -288,7 +331,7 @@ for teamKey in teamKeyArr:
                             prevcode = event['t']
 
                         if teamKey != "ALL":
-                            makeMap(centerArrGame, str(teamKey)+"_vs_"+gameinfo[4]+"_For_"+str(evCode)+"_code",teamKey,0)
+                            makeMap(centerArrGame, str(teamKey)+"_vs_"+gameinfo[4]+month+"-"+day+"_For_"+str(codeDict[evCode]),teamKey,0)
 
 
                     if teamKey == gameinfo[4] or teamKey == "ALL":
@@ -327,9 +370,11 @@ for teamKey in teamKeyArr:
                                 if prevcode == 20 and event['t'] == 20 and 'r' in event and event['r'] in receiverDict:
                                     receiverDict[event['r']].append((math.hypot(event['x'] - prevx, event['y'] - prevy), gameinfo[4],gameinfo[3]))
                                     receiverDictDF[event['r']].append((event['y'] - prevy, gameinfo[4],gameinfo[3]))
+                                    receiverDictCF[event['r']].append((event['x'] - prevx, gameinfo[4], gameinfo[3]))
                                 elif 'r' in event and prevcode == 20 and event['t'] == 20 :
                                     receiverDict[event['r']] = [(math.hypot(event['x'] - prevx, event['y'] - prevy), gameinfo[4],gameinfo[3])]
                                     receiverDictDF[event['r']] = [(event['y'] - prevy, gameinfo[4],gameinfo[3])]
+                                    receiverDictCF[event['r']] = [(event['x'] - prevx, gameinfo[4], gameinfo[3])]
 
 
 
@@ -356,9 +401,12 @@ for teamKey in teamKeyArr:
                                     if 'r' in event and event['r'] in receiverDict:
                                         receiverDict[event['r']].append((math.hypot(event['x'] - prevx, event['y'] - prevy),gameinfo[4],gameinfo[3]))
                                         receiverDictDF[event['r']].append((event['y'] - prevy,gameinfo[4],gameinfo[3]))
+                                        receiverDictCF[event['r']].append(
+                                            (event['x'] - prevx, gameinfo[4], gameinfo[3]))
                                     elif 'r' in event:
                                         receiverDict[event['r']] = [(math.hypot(event['x'] - prevx, event['y'] - prevy),gameinfo[4],gameinfo[3])]
                                         receiverDictDF[event['r']] = [(event['y'] - prevy,gameinfo[4],gameinfo[3])]
+                                        receiverDictCF[event['r']] = [(event['x'] - prevx, gameinfo[4], gameinfo[3])]
 
                             if 'r' in event and event['t'] == 20:
                                 thrower = event['r']
@@ -367,7 +415,7 @@ for teamKey in teamKeyArr:
                             prevcode = event['t']
 
                         if teamKey != "ALL":
-                            makeMap(centerArrGame, str(teamKey)+"_vs_"+gameinfo[3]+"_For_"+str(evCode)+"_code",teamKey,0)
+                            makeMap(centerArrGame, str(teamKey)+"_vs_"+gameinfo[3]+month+"-"+day+"_For_"+str(codeDict[evCode]),teamKey,0)
 
                 except Exception as e:
                     print(str(teamKey) + "not found")
@@ -375,8 +423,8 @@ for teamKey in teamKeyArr:
 
         if len(centerArrIndi) > 0:
             makeMap(centerArrIndi, "All_Games_For_Player_"+str(playerCode),teamKey,0)
-        makeMap(centerArrTot, str(teamKey) + "_ALL_GAMES_"+str(evCode)+"_code", teamKey, 0)
-        if evCode == 20:
+        makeMap(centerArrTot, str(teamKey) + "_ALL_GAMES_"+str(codeDict[evCode]), teamKey, 0)
+        if evCode == 99:
             makeMap(centerArrFromThrowerO, str(teamKey)+"_O_From_Thrower",teamKey,1)
             makeMap(centerArrFromThrowerD, str(teamKey)+"_D_From_Thrower",teamKey,1)
     if teamKey == "ALL":
@@ -433,6 +481,22 @@ for teamKey in teamKeyArr:
                 for dist, o, d in receiverDictDF[key]:
                     receiverWriter.writerow([count, key, dist, o, d])
                     count += 1
+
+        with open(str(teamKey) + '/' + str(teamKey) + '_receiverInfoCF.csv', 'w', newline='') as csvfile2:
+            receiverWriter = csv.writer(csvfile2, delimiter=',')
+            receiverWriter.writerow(["ID", "Player", "Dist", "O", "D"])
+            count = 1
+            for key in receiverDictCF:
+                for dist, o, d in receiverDictCF[key]:
+                    receiverWriter.writerow([count, key, dist, o, d])
+                    count += 1
+
+
+        """ with open('file.txt', 'w') as file:
+            lists = eventcombine.tolist()
+            file.write(json.dumps(lists))
+        """
+
 
 
 
