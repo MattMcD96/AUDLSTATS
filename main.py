@@ -175,7 +175,6 @@ for teamKey in teamKeyArr:
         receiverDictDF = {}
         receiverDictCF = {}
         playerDict = {}
-        print(codeDict[evCode])
         try:
             os.stat(teamKey)
         except:
